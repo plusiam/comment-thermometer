@@ -15,6 +15,7 @@ const comments = [
 ];
 
 let draggedElement = null;
+let selectedElement = null; // For click-to-move
 let placedComments = {
     hurt: [],
     cheer: [],
@@ -25,16 +26,22 @@ let placedComments = {
 document.addEventListener('DOMContentLoaded', () => {
     initializeComments();
     setupDragAndDrop();
+    loadProgress(); // 저장된 진행상황 불러오기
+
+    // 성찰 질문 입력 시 자동 저장
+    document.querySelectorAll('.answer-box').forEach(box => {
+        box.addEventListener('input', saveProgress);
+    });
 });
 
 // 댓글 카드 초기화
 function initializeComments() {
     const commentsList = document.getElementById('commentsList');
     commentsList.innerHTML = '';
-    
+
     // 댓글을 랜덤하게 섞기
     const shuffledComments = [...comments].sort(() => Math.random() - 0.5);
-    
+
     shuffledComments.forEach(comment => {
         const card = createCommentCard(comment);
         commentsList.appendChild(card);
@@ -49,22 +56,33 @@ function createCommentCard(comment) {
     card.dataset.commentId = comment.id;
     card.dataset.correctType = comment.type;
     card.textContent = comment.text;
-    
+
+    card.tabIndex = 0; // Make focusable
+
     // 드래그 이벤트 리스너
     card.addEventListener('dragstart', handleDragStart);
     card.addEventListener('dragend', handleDragEnd);
-    
+
+    // 클릭/키보드 이벤트 리스너 (접근성)
+    card.addEventListener('click', handleCardClick);
+    card.addEventListener('keydown', handleCardKeydown);
+
     return card;
 }
 
 // 드래그 앤 드롭 설정
 function setupDragAndDrop() {
     const dropZones = document.querySelectorAll('.drop-area');
-    
+
     dropZones.forEach(zone => {
+        zone.tabIndex = 0; // Make focusable
         zone.addEventListener('dragover', handleDragOver);
         zone.addEventListener('drop', handleDrop);
         zone.addEventListener('dragleave', handleDragLeave);
+
+        // 클릭/키보드 이벤트 리스너 (접근성)
+        zone.addEventListener('click', handleZoneClick);
+        zone.addEventListener('keydown', handleZoneKeydown);
     });
 }
 
@@ -86,7 +104,7 @@ function handleDragOver(e) {
     if (e.preventDefault) {
         e.preventDefault();
     }
-    
+
     e.dataTransfer.dropEffect = 'move';
     this.classList.add('drag-over');
     return false;
@@ -102,9 +120,9 @@ function handleDrop(e) {
     if (e.stopPropagation) {
         e.stopPropagation();
     }
-    
+
     this.classList.remove('drag-over');
-    
+
     if (draggedElement) {
         // 기존 위치에서 제거
         const parent = draggedElement.parentNode;
@@ -114,34 +132,138 @@ function handleDrop(e) {
             const commentId = parseInt(draggedElement.dataset.commentId);
             placedComments[previousZone] = placedComments[previousZone].filter(id => id !== commentId);
         }
-        
+
         // 새로운 위치에 추가
         this.appendChild(draggedElement);
         draggedElement.classList.add('placed');
-        
+
         // 배치된 댓글 추적
         const zone = this.id.replace('Zone', '').toLowerCase();
         const commentId = parseInt(draggedElement.dataset.commentId);
-        
+
         if (!placedComments[zone]) {
             placedComments[zone] = [];
         }
-        
+
         if (!placedComments[zone].includes(commentId)) {
             placedComments[zone].push(commentId);
         }
-        
+
         checkIfComplete();
+
+        // 데이터 저장
+        if (typeof saveProgress === 'function') {
+            saveProgress();
+        }
     }
-    
+
     return false;
+}
+
+// --- 접근성 기능 (클릭 이동 & 키보드) ---
+
+function handleCardClick(e) {
+    // 이미 배치된 카드는 선택 불가 (필요시 변경 가능)
+    // if (this.classList.contains('placed')) return;
+
+    if (selectedElement === this) {
+        // 같은 카드 클릭 시 선택 해제
+        deselectCard();
+    } else {
+        // 다른 카드 선택
+        selectCard(this);
+    }
+}
+
+function handleCardKeydown(e) {
+    if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        handleCardClick.call(this, e);
+    }
+}
+
+function selectCard(card) {
+    // 기존 선택 해제
+    if (selectedElement) {
+        selectedElement.classList.remove('selected');
+    }
+
+    selectedElement = card;
+    card.classList.add('selected');
+
+    // 드롭 영역들에 시각적 힌트 제공
+    document.querySelectorAll('.drop-area').forEach(zone => {
+        zone.classList.add('selectable');
+    });
+}
+
+function deselectCard() {
+    if (selectedElement) {
+        selectedElement.classList.remove('selected');
+        selectedElement = null;
+    }
+
+    // 드롭 영역 힌트 제거
+    document.querySelectorAll('.drop-area').forEach(zone => {
+        zone.classList.remove('selectable');
+    });
+}
+
+function handleZoneClick(e) {
+    if (selectedElement) {
+        moveCardToZone(selectedElement, this);
+        deselectCard();
+    }
+}
+
+function handleZoneKeydown(e) {
+    if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        if (selectedElement) {
+            moveCardToZone(selectedElement, this);
+            deselectCard();
+        }
+    }
+}
+
+function moveCardToZone(card, zone) {
+    // 기존 위치에서 제거 로직 (handleDrop과 유사)
+    const parent = card.parentNode;
+    if (parent && parent.classList.contains('drop-area')) {
+        const previousZone = parent.id.replace('Zone', '').toLowerCase();
+        const commentId = parseInt(card.dataset.commentId);
+        placedComments[previousZone] = placedComments[previousZone].filter(id => id !== commentId);
+    }
+
+    // 새로운 위치에 추가
+    zone.appendChild(card);
+    card.classList.add('placed');
+
+    // 배치된 댓글 추적
+    const zoneName = zone.id.replace('Zone', '').toLowerCase();
+    const commentId = parseInt(card.dataset.commentId);
+
+    if (!placedComments[zoneName]) {
+        placedComments[zoneName] = [];
+    }
+
+    if (!placedComments[zoneName].includes(commentId)) {
+        placedComments[zoneName].push(commentId);
+    }
+
+    checkIfComplete();
+
+    // 데이터 저장 (추후 구현)
+    if (typeof saveProgress === 'function') {
+        saveProgress();
+    }
 }
 
 // 모든 댓글이 배치되었는지 확인
 function checkIfComplete() {
     const totalPlaced = placedComments.hurt.length + placedComments.cheer.length + placedComments.indifferent.length;
     const submitBtn = document.getElementById('submitBtn');
-    
+
     if (totalPlaced === comments.length) {
         submitBtn.style.display = 'block';
         submitBtn.classList.add('pulse');
@@ -154,15 +276,15 @@ function checkIfComplete() {
 // 결과 표시
 function showResults() {
     const totalPlaced = placedComments.hurt.length + placedComments.cheer.length + placedComments.indifferent.length;
-    
+
     if (totalPlaced === 0) {
         alert('먼저 댓글들을 분류해주세요!');
         return;
     }
-    
+
     const resultSection = document.getElementById('resultSection');
     const resultChart = document.getElementById('resultChart');
-    
+
     // 결과 차트 생성
     resultChart.innerHTML = `
         <div class="result-item">
@@ -181,13 +303,13 @@ function showResults() {
             <div class="label">무관심한 말</div>
         </div>
     `;
-    
+
     // 결과 섹션 표시
     resultSection.style.display = 'block';
-    
+
     // 결과 섹션으로 스크롤
     resultSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    
+
     // 정답 체크 (선택사항)
     checkAnswers();
 }
@@ -196,20 +318,20 @@ function showResults() {
 function checkAnswers() {
     let correctCount = 0;
     let totalCount = 0;
-    
+
     // 각 영역의 댓글 확인
     ['hurt', 'cheer', 'indifferent'].forEach(zone => {
         placedComments[zone].forEach(commentId => {
             totalCount++;
             const comment = comments.find(c => c.id === commentId);
-            
+
             if (comment) {
                 // 응원하는 말은 정확히 구분해야 함
                 if (comment.type === 'cheer') {
                     if (zone === 'cheer') {
                         correctCount++;
                     }
-                } 
+                }
                 // 상처주는 말과 무관심한 말은 섞어도 정답 (부정적 계열)
                 else if (comment.type === 'hurt' || comment.type === 'indifferent') {
                     if (zone === 'hurt' || zone === 'indifferent') {
@@ -219,19 +341,19 @@ function checkAnswers() {
             }
         });
     });
-    
+
     // 결과에 피드백 추가
     const feedbackArea = document.getElementById('feedbackArea');
     const feedbackDiv = document.createElement('div');
     feedbackDiv.className = 'feedback-box';
     feedbackDiv.style.cssText = 'margin-top: 20px; padding: 20px; background: #f8f9ff; border-radius: 10px; text-align: center;';
-    
+
     const accuracy = Math.round((correctCount / totalCount) * 100);
-    
+
     let feedbackMessage = '';
     let feedbackEmoji = '';
     let feedbackDetail = '';
-    
+
     if (accuracy >= 90) {
         feedbackEmoji = '🎉';
         feedbackMessage = '정말 잘했어요! 말이 주는 영향을 잘 이해하고 있네요!';
@@ -245,7 +367,7 @@ function checkAnswers() {
         feedbackMessage = '괜찮아요! 다시 한번 생각해보면서 분류해봐요!';
         feedbackDetail = '응원하는 말과 그렇지 않은 말을 먼저 나눠볼까요?';
     }
-    
+
     feedbackDiv.innerHTML = `
         <div style="font-size: 3em; margin-bottom: 10px;">${feedbackEmoji}</div>
         <div style="font-size: 1.3em; font-weight: bold; color: #333; margin-bottom: 10px;">
@@ -258,7 +380,7 @@ function checkAnswers() {
             💡 ${feedbackDetail}
         </div>
     `;
-    
+
     // 기존 피드백 제거하고 새로 추가
     feedbackArea.innerHTML = '';
     feedbackArea.appendChild(feedbackDiv);
@@ -267,12 +389,35 @@ function checkAnswers() {
 // 결과를 이미지로 다운로드
 function downloadResult() {
     const captureArea = document.getElementById('captureArea');
-    
-    // 성찰 답변 수집
+
+    // 성찰 답변 수집 및 HTML 생성
+    const reflectionHTML = generateReflectionHTML();
+
+    // 성찰 답변을 captureArea에 임시로 추가
+    const reflectionDiv = document.createElement('div');
+    reflectionDiv.id = 'tempReflection';
+    reflectionDiv.style.cssText = 'margin-top: 30px; padding: 20px; background: #f8f9ff; border-radius: 10px;';
+
+    if (reflectionHTML) {
+        reflectionDiv.innerHTML = reflectionHTML;
+        captureArea.appendChild(reflectionDiv);
+    }
+
+    // 이미지 생성 및 다운로드
+    generateImage(captureArea, () => {
+        // 임시로 추가한 성찰 답변 제거
+        if (reflectionDiv) {
+            reflectionDiv.remove();
+        }
+    });
+}
+
+// 성찰 답변 HTML 생성
+function generateReflectionHTML() {
     const answers = [];
     const answerBoxes = document.querySelectorAll('.answer-box');
     const questions = document.querySelectorAll('.question');
-    
+
     answerBoxes.forEach((box, index) => {
         const answer = box.value.trim();
         if (answer) {
@@ -282,73 +427,63 @@ function downloadResult() {
             });
         }
     });
-    
-    // 성찰 답변을 captureArea에 임시로 추가
-    const reflectionDiv = document.createElement('div');
-    reflectionDiv.id = 'tempReflection';
-    reflectionDiv.style.cssText = 'margin-top: 30px; padding: 20px; background: #f8f9ff; border-radius: 10px;';
-    
-    if (answers.length > 0) {
-        let reflectionHTML = '<h3 style="color: #333; margin-bottom: 15px; text-align: center;">💭 나의 생각</h3>';
-        
-        answers.forEach(item => {
-            reflectionHTML += `
-                <div style="margin-bottom: 15px; padding: 15px; background: white; border-radius: 8px; border-left: 4px solid #667eea;">
-                    <div style="font-weight: bold; color: #333; margin-bottom: 8px;">${item.question}</div>
-                    <div style="color: #555; line-height: 1.6;">${item.answer}</div>
-                </div>
-            `;
-        });
-        
-        reflectionDiv.innerHTML = reflectionHTML;
-        captureArea.appendChild(reflectionDiv);
-    }
-    
-    // html2canvas로 캡처
-    html2canvas(captureArea, {
+
+    if (answers.length === 0) return null;
+
+    let html = '<h3 style="color: #333; margin-bottom: 15px; text-align: center;">💭 나의 생각</h3>';
+
+    answers.forEach(item => {
+        html += `
+            <div style="margin-bottom: 15px; padding: 15px; background: white; border-radius: 8px; border-left: 4px solid #667eea;">
+                <div style="font-weight: bold; color: #333; margin-bottom: 8px;">${item.question}</div>
+                <div style="color: #555; line-height: 1.6;">${item.answer}</div>
+            </div>
+        `;
+    });
+
+    return html;
+}
+
+// 이미지 생성 및 다운로드 처리
+function generateImage(element, callback) {
+    html2canvas(element, {
         backgroundColor: '#ffffff',
         scale: 2, // 고화질
         logging: false,
         useCORS: true
     }).then(canvas => {
-        // 임시로 추가한 성찰 답변 제거
-        const tempReflection = document.getElementById('tempReflection');
-        if (tempReflection) {
-            tempReflection.remove();
-        }
-        
+        // 콜백 실행 (임시 요소 제거 등)
+        if (callback) callback();
+
         // Canvas를 이미지로 변환
-        canvas.toBlob(function(blob) {
+        canvas.toBlob(function (blob) {
             // 다운로드 링크 생성
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
-            
+
             // 파일명 생성 (날짜 포함)
             const now = new Date();
             const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
             const timeStr = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
-            
+
             link.download = `댓글온도계_결과_${dateStr}_${timeStr}.png`;
             link.href = url;
-            
+
             // 다운로드 실행
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            
+
             // URL 해제
             URL.revokeObjectURL(url);
-            
+
             // 성공 메시지
             showDownloadMessage();
         });
     }).catch(error => {
-        // 임시로 추가한 성찰 답변 제거 (에러 시에도)
-        const tempReflection = document.getElementById('tempReflection');
-        if (tempReflection) {
-            tempReflection.remove();
-        }
-        
+        // 콜백 실행 (에러 시에도 임시 요소 제거)
+        if (callback) callback();
+
         console.error('이미지 생성 중 오류:', error);
         alert('이미지 저장 중 오류가 발생했습니다. 다시 시도해주세요.');
     });
@@ -370,16 +505,16 @@ function showDownloadMessage() {
         text-align: center;
         animation: fadeInOut 2s ease-in-out;
     `;
-    
+
     message.innerHTML = `
         <div style="font-size: 3em; margin-bottom: 10px;">✅</div>
         <div style="font-size: 1.2em; font-weight: bold; color: #333;">
             이미지가 저장되었습니다!
         </div>
     `;
-    
+
     document.body.appendChild(message);
-    
+
     // 애니메이션 추가
     const style = document.createElement('style');
     style.textContent = `
@@ -391,7 +526,7 @@ function showDownloadMessage() {
         }
     `;
     document.head.appendChild(style);
-    
+
     // 2초 후 제거
     setTimeout(() => {
         document.body.removeChild(message);
@@ -406,7 +541,7 @@ function resetActivity() {
         cheer: [],
         indifferent: []
     };
-    
+
     // 드롭 영역 비우기
     document.querySelectorAll('.drop-area').forEach(zone => {
         const hint = zone.querySelector('.drop-hint');
@@ -417,23 +552,82 @@ function resetActivity() {
             zone.innerHTML = '<p class="drop-hint">여기로 드래그하세요</p>';
         }
     });
-    
+
     // 결과 섹션 숨기기
     document.getElementById('resultSection').style.display = 'none';
-    
+
     // 댓글 카드 다시 생성
     initializeComments();
-    
+
     // 제출 버튼 숨기기
     document.getElementById('submitBtn').style.display = 'none';
-    
+
     // 성찰 답변 초기화
     document.querySelectorAll('.answer-box').forEach(box => {
         box.value = '';
     });
-    
+
     // 맨 위로 스크롤
     window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    // 저장된 데이터 삭제
+    localStorage.removeItem('commentThermometer_progress');
+}
+
+// --- 데이터 저장 및 불러오기 (localStorage) ---
+
+function saveProgress() {
+    const progress = {
+        placedComments: placedComments,
+        answers: []
+    };
+
+    // 성찰 답변 저장
+    document.querySelectorAll('.answer-box').forEach(box => {
+        progress.answers.push(box.value);
+    });
+
+    localStorage.setItem('commentThermometer_progress', JSON.stringify(progress));
+}
+
+function loadProgress() {
+    const savedData = localStorage.getItem('commentThermometer_progress');
+
+    if (savedData) {
+        const progress = JSON.parse(savedData);
+
+        // 1. 배치된 댓글 복원
+        if (progress.placedComments) {
+            placedComments = progress.placedComments;
+
+            // 각 영역별로 댓글 카드 이동
+            ['hurt', 'cheer', 'indifferent'].forEach(zoneName => {
+                const zone = document.getElementById(zoneName + 'Zone');
+                const commentIds = placedComments[zoneName];
+
+                commentIds.forEach(id => {
+                    // 해당 ID를 가진 카드 찾기
+                    const card = document.querySelector(`.comment-card[data-comment-id="${id}"]`);
+                    if (card) {
+                        zone.appendChild(card);
+                        card.classList.add('placed');
+                    }
+                });
+            });
+
+            checkIfComplete();
+        }
+
+        // 2. 성찰 답변 복원
+        if (progress.answers) {
+            const answerBoxes = document.querySelectorAll('.answer-box');
+            progress.answers.forEach((answer, index) => {
+                if (answerBoxes[index]) {
+                    answerBoxes[index].value = answer;
+                }
+            });
+        }
+    }
 }
 
 // 애니메이션 효과를 위한 CSS 추가

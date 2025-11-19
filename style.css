@@ -126,6 +126,37 @@ h1 {
     cursor: default;
 }
 
+/* Accessibility & Selection Styles */
+.comment-card:focus {
+    outline: 3px solid #667eea;
+    outline-offset: 2px;
+}
+
+.comment-card.selected {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.5);
+    transform: translateY(-2px);
+    background-color: #f0f4ff;
+}
+
+.drop-area:focus {
+    outline: 3px solid #667eea;
+    outline-offset: 2px;
+}
+
+.drop-area.selectable {
+    cursor: pointer;
+    border-color: #667eea;
+    background-color: rgba(102, 126, 234, 0.1);
+    animation: pulse-border 2s infinite;
+}
+
+@keyframes pulse-border {
+    0% { border-color: rgba(102, 126, 234, 0.5); }
+    50% { border-color: rgba(102, 126, 234, 1); }
+    100% { border-color: rgba(102, 126, 234, 0.5); }
+}
+
 /* Thermometer Zones */
 .thermometer-zones {
     display: flex;
