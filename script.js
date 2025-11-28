@@ -398,6 +398,263 @@ function showDownloadMessage() {
     }, 2000);
 }
 
+// 결과를 PDF로 다운로드
+function downloadResultAsPDF() {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+    });
+    
+    // 페이지 설정
+    const pageWidth = 210; // A4 width in mm
+    const pageHeight = 297; // A4 height in mm
+    const margin = 20;
+    const contentWidth = pageWidth - (margin * 2);
+    let yPosition = margin;
+    
+    // 한글 폰트 설정 (기본 폰트 사용)
+    doc.setFont('helvetica');
+    
+    // 페이지 추가 함수
+    function checkPageBreak(requiredHeight) {
+        if (yPosition + requiredHeight > pageHeight - margin) {
+            doc.addPage();
+            yPosition = margin;
+            return true;
+        }
+        return false;
+    }
+    
+    // 제목
+    doc.setFontSize(24);
+    doc.setTextColor(51, 51, 51);
+    doc.text('🎯 나의 분류 결과', pageWidth / 2, yPosition, { align: 'center' });
+    yPosition += 15;
+    
+    // 구분선
+    doc.setDrawColor(102, 126, 234);
+    doc.setLineWidth(0.5);
+    doc.line(margin, yPosition, pageWidth - margin, yPosition);
+    yPosition += 10;
+    
+    // 분류 결과
+    doc.setFontSize(16);
+    doc.setTextColor(51, 51, 51);
+    
+    const results = [
+        { emoji: '💔', label: '상처주는 말', count: placedComments.hurt.length, color: [255, 107, 107] },
+        { emoji: '💚', label: '응원하는 말', count: placedComments.cheer.length, color: [81, 207, 102] },
+        { emoji: '😐', label: '무관심한 말', count: placedComments.indifferent.length, color: [134, 142, 150] }
+    ];
+    
+    results.forEach((result, index) => {
+        checkPageBreak(20);
+        
+        // 배경 박스
+        doc.setFillColor(result.color[0], result.color[1], result.color[2]);
+        doc.roundedRect(margin, yPosition, contentWidth, 15, 2, 2, 'F');
+        
+        // 텍스트
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(14);
+        doc.text(`${result.emoji} ${result.label}: ${result.count}개`, margin + 5, yPosition + 10);
+        
+        yPosition += 20;
+    });
+    
+    yPosition += 5;
+    
+    // 피드백 섹션
+    const feedbackArea = document.getElementById('feedbackArea');
+    if (feedbackArea && feedbackArea.textContent.trim()) {
+        checkPageBreak(40);
+        
+        // 정답률 계산
+        let correctCount = 0;
+        let totalCount = 0;
+        
+        ['hurt', 'cheer', 'indifferent'].forEach(zone => {
+            placedComments[zone].forEach(commentId => {
+                totalCount++;
+                const comment = comments.find(c => c.id === commentId);
+                
+                if (comment) {
+                    if (comment.type === 'cheer') {
+                        if (zone === 'cheer') correctCount++;
+                    } else if (comment.type === 'hurt' || comment.type === 'indifferent') {
+                        if (zone === 'hurt' || zone === 'indifferent') correctCount++;
+                    }
+                }
+            });
+        });
+        
+        const accuracy = Math.round((correctCount / totalCount) * 100);
+        
+        let feedbackEmoji = '';
+        let feedbackMessage = '';
+        let feedbackDetail = '';
+        
+        if (accuracy >= 90) {
+            feedbackEmoji = '🎉';
+            feedbackMessage = '정말 잘했어요! 말이 주는 영향을 잘 이해하고 있네요!';
+            feedbackDetail = '응원하는 말과 부정적인 말을 잘 구분했어요.';
+        } else if (accuracy >= 70) {
+            feedbackEmoji = '👏';
+            feedbackMessage = '좋아요! 각 말이 주는 느낌에 대해 더 생각해봐요!';
+            feedbackDetail = '조금만 더 생각해보면 완벽해질 거예요.';
+        } else {
+            feedbackEmoji = '💪';
+            feedbackMessage = '괜찮아요! 다시 한번 생각해보면서 분류해봐요!';
+            feedbackDetail = '응원하는 말과 그렇지 않은 말을 먼저 나눠볼까요?';
+        }
+        
+        // 피드백 박스
+        doc.setFillColor(248, 249, 255);
+        doc.roundedRect(margin, yPosition, contentWidth, 35, 3, 3, 'F');
+        
+        // 이모지와 메시지
+        doc.setFontSize(20);
+        doc.setTextColor(51, 51, 51);
+        doc.text(feedbackEmoji, pageWidth / 2, yPosition + 8, { align: 'center' });
+        
+        doc.setFontSize(14);
+        doc.setTextColor(51, 51, 51);
+        const messageLines = doc.splitTextToSize(feedbackMessage, contentWidth - 10);
+        doc.text(messageLines, pageWidth / 2, yPosition + 16, { align: 'center' });
+        
+        doc.setFontSize(12);
+        doc.setTextColor(102, 102, 102);
+        doc.text(`나의 이해도: ${accuracy}%`, pageWidth / 2, yPosition + 24, { align: 'center' });
+        
+        doc.setFontSize(10);
+        doc.setTextColor(136, 136, 136);
+        const detailLines = doc.splitTextToSize(`💡 ${feedbackDetail}`, contentWidth - 10);
+        doc.text(detailLines, pageWidth / 2, yPosition + 30, { align: 'center' });
+        
+        yPosition += 40;
+    }
+    
+    // 성찰 답변
+    const answers = [];
+    const answerBoxes = document.querySelectorAll('.answer-box');
+    const questions = document.querySelectorAll('.question');
+    
+    answerBoxes.forEach((box, index) => {
+        const answer = box.value.trim();
+        if (answer) {
+            answers.push({
+                question: questions[index].textContent,
+                answer: answer
+            });
+        }
+    });
+    
+    if (answers.length > 0) {
+        checkPageBreak(20);
+        
+        // 성찰 섹션 제목
+        doc.setFontSize(18);
+        doc.setTextColor(51, 51, 51);
+        doc.text('💭 나의 생각', pageWidth / 2, yPosition, { align: 'center' });
+        yPosition += 10;
+        
+        // 각 질문과 답변
+        answers.forEach((item, index) => {
+            // 질문과 답변의 높이 계산
+            const questionLines = doc.splitTextToSize(item.question, contentWidth - 10);
+            const answerLines = doc.splitTextToSize(item.answer, contentWidth - 10);
+            const requiredHeight = 10 + (questionLines.length * 6) + (answerLines.length * 5) + 10;
+            
+            checkPageBreak(requiredHeight);
+            
+            // 질문 박스
+            doc.setFillColor(248, 249, 255);
+            const boxHeight = 8 + (questionLines.length * 6) + (answerLines.length * 5);
+            doc.roundedRect(margin, yPosition, contentWidth, boxHeight, 2, 2, 'F');
+            
+            // 왼쪽 테두리
+            doc.setFillColor(102, 126, 234);
+            doc.rect(margin, yPosition, 3, boxHeight, 'F');
+            
+            // 질문
+            doc.setFontSize(11);
+            doc.setTextColor(51, 51, 51);
+            doc.setFont('helvetica', 'bold');
+            doc.text(questionLines, margin + 8, yPosition + 6);
+            
+            // 답변
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(10);
+            doc.setTextColor(85, 85, 85);
+            const answerY = yPosition + 6 + (questionLines.length * 6) + 3;
+            doc.text(answerLines, margin + 8, answerY);
+            
+            yPosition += boxHeight + 8;
+        });
+    }
+    
+    // 파일명 생성
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+    const timeStr = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+    const filename = `댓글온도계_결과_${dateStr}_${timeStr}.pdf`;
+    
+    // PDF 저장
+    doc.save(filename);
+    
+    // 성공 메시지
+    showDownloadMessage('PDF');
+}
+
+// 다운로드 성공 메시지 (수정)
+function showDownloadMessage(type = 'image') {
+    const message = document.createElement('div');
+    message.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        padding: 30px 50px;
+        border-radius: 15px;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        z-index: 1000;
+        text-align: center;
+        animation: fadeInOut 2s ease-in-out;
+    `;
+    
+    const fileType = type === 'PDF' ? 'PDF' : '이미지';
+    const emoji = type === 'PDF' ? '📄' : '✅';
+    
+    message.innerHTML = `
+        <div style="font-size: 3em; margin-bottom: 10px;">${emoji}</div>
+        <div style="font-size: 1.2em; font-weight: bold; color: #333;">
+            ${fileType}가 저장되었습니다!
+        </div>
+    `;
+    
+    document.body.appendChild(message);
+    
+    // 애니메이션 추가
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+            20% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+        }
+    `;
+    document.head.appendChild(style);
+    
+    // 2초 후 제거
+    setTimeout(() => {
+        document.body.removeChild(message);
+    }, 2000);
+}
+
 // 활동 초기화
 function resetActivity() {
     // 배치된 댓글 초기화

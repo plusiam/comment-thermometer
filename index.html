@@ -1,118 +1,138 @@
 <!DOCTYPE html>
 <html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>댓글 온도계 - 말의 온도를 느껴요</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css" />
     <!-- html2canvas 라이브러리 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-</head>
-<body>
+    <!-- jsPDF 라이브러리 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  </head>
+  <body>
     <div class="container">
-        <header>
-            <h1>💬 댓글 온도계</h1>
-            <p class="subtitle">슈퍼토끼 재빨라의 뉴스에 달린 댓글을 살펴봐요</p>
-        </header>
+      <header>
+        <h1>💬 댓글 온도계</h1>
+        <p class="subtitle">슈퍼토끼 재빨라의 뉴스에 달린 댓글을 살펴봐요</p>
+      </header>
 
-        <section class="story-section">
-            <div class="news-box">
-                <h2>📰 속보: 토끼 재빨라, 거북이에게 패배!</h2>
-                <p class="news-content">
-                    오늘 동물마을 운동장에서 열린 달리기 대회에서 
-                    슈퍼토끼 재빨라가 거북이에게 패배했습니다. 
-                    재빨라는 중간에 낮잠을 자다가 역전을 당했습니다.
-                </p>
+      <section class="story-section">
+        <div class="news-box">
+          <h2>📰 속보: 토끼 재빨라, 거북이에게 패배!</h2>
+          <p class="news-content">
+            오늘 동물마을 운동장에서 열린 달리기 대회에서 슈퍼토끼 재빨라가
+            거북이에게 패배했습니다. 재빨라는 중간에 낮잠을 자다가 역전을
+            당했습니다.
+          </p>
+        </div>
+        <p class="instruction">
+          🤔 이 뉴스에 사람들이 댓글을 달았어요. <br />
+          각 댓글을 읽고 어떤 종류의 말인지 분류해볼까요?
+        </p>
+      </section>
+
+      <section class="activity-section">
+        <div class="comments-pool">
+          <h3>📝 댓글 목록</h3>
+          <div id="commentsList" class="comments-list">
+            <!-- 댓글 카드들이 여기에 들어갑니다 -->
+          </div>
+        </div>
+
+        <div class="thermometer-zones">
+          <div class="zone hurt-zone" data-temperature="hurt">
+            <div class="zone-header">
+              <span class="emoji">💔</span>
+              <h3>상처주는 말</h3>
+              <p class="zone-description">기분 나쁘게 하는 말</p>
             </div>
-            <p class="instruction">
-                🤔 이 뉴스에 사람들이 댓글을 달았어요. <br>
-                각 댓글을 읽고 어떤 종류의 말인지 분류해볼까요?
+            <div class="drop-area" id="hurtZone">
+              <p class="drop-hint">여기로 드래그하세요</p>
+            </div>
+          </div>
+
+          <div class="zone cheer-zone" data-temperature="cheer">
+            <div class="zone-header">
+              <span class="emoji">💚</span>
+              <h3>응원하는 말</h3>
+              <p class="zone-description">힘이 되고 기분 좋게 하는 말</p>
+            </div>
+            <div class="drop-area" id="cheerZone">
+              <p class="drop-hint">여기로 드래그하세요</p>
+            </div>
+          </div>
+
+          <div class="zone indifferent-zone" data-temperature="indifferent">
+            <div class="zone-header">
+              <span class="emoji">😐</span>
+              <h3>무관심한 말</h3>
+              <p class="zone-description">별 생각 없이 하는 말</p>
+            </div>
+            <div class="drop-area" id="indifferentZone">
+              <p class="drop-hint">여기로 드래그하세요</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="result-section" id="resultSection" style="display: none">
+        <div id="captureArea">
+          <h2>🎯 나의 분류 결과</h2>
+          <div class="result-chart" id="resultChart"></div>
+          <div id="feedbackArea"></div>
+        </div>
+        <div class="result-buttons">
+          <button class="btn-download" onclick="downloadResult()">
+            📸 이미지로 저장하기
+          </button>
+          <button class="btn-download-pdf" onclick="downloadResultAsPDF()">
+            📄 PDF로 저장하기
+          </button>
+          <button class="btn-reset" onclick="resetActivity()">
+            🔄 다시 하기
+          </button>
+        </div>
+      </section>
+
+      <section class="reflection-section">
+        <h2>💭 생각해봐요</h2>
+        <div class="reflection-questions">
+          <div class="question-box">
+            <p class="question">
+              ❓ 상처주는 말과 무관심한 말은 어떻게 다를까요?
             </p>
-        </section>
+            <textarea
+              class="answer-box"
+              placeholder="자유롭게 생각을 적어보세요..."
+            ></textarea>
+          </div>
+          <div class="question-box">
+            <p class="question">
+              ❓ 재빨라가 이런 댓글들을 본다면 어떤 기분일까요?
+            </p>
+            <textarea
+              class="answer-box"
+              placeholder="자유롭게 생각을 적어보세요..."
+            ></textarea>
+          </div>
+          <div class="question-box">
+            <p class="question">
+              ❓ 댓글을 달기 전에 우리가 생각해야 할 것은 무엇일까요?
+            </p>
+            <textarea
+              class="answer-box"
+              placeholder="자유롭게 생각을 적어보세요..."
+            ></textarea>
+          </div>
+        </div>
+      </section>
 
-        <section class="activity-section">
-            <div class="comments-pool">
-                <h3>📝 댓글 목록</h3>
-                <div id="commentsList" class="comments-list">
-                    <!-- 댓글 카드들이 여기에 들어갑니다 -->
-                </div>
-            </div>
-
-            <div class="thermometer-zones">
-                <div class="zone hurt-zone" data-temperature="hurt">
-                    <div class="zone-header">
-                        <span class="emoji">💔</span>
-                        <h3>상처주는 말</h3>
-                        <p class="zone-description">기분 나쁘게 하는 말</p>
-                    </div>
-                    <div class="drop-area" id="hurtZone">
-                        <p class="drop-hint">여기로 드래그하세요</p>
-                    </div>
-                </div>
-
-                <div class="zone cheer-zone" data-temperature="cheer">
-                    <div class="zone-header">
-                        <span class="emoji">💚</span>
-                        <h3>응원하는 말</h3>
-                        <p class="zone-description">힘이 되고 기분 좋게 하는 말</p>
-                    </div>
-                    <div class="drop-area" id="cheerZone">
-                        <p class="drop-hint">여기로 드래그하세요</p>
-                    </div>
-                </div>
-
-                <div class="zone indifferent-zone" data-temperature="indifferent">
-                    <div class="zone-header">
-                        <span class="emoji">😐</span>
-                        <h3>무관심한 말</h3>
-                        <p class="zone-description">별 생각 없이 하는 말</p>
-                    </div>
-                    <div class="drop-area" id="indifferentZone">
-                        <p class="drop-hint">여기로 드래그하세요</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section class="result-section" id="resultSection" style="display: none;">
-            <div id="captureArea">
-                <h2>🎯 나의 분류 결과</h2>
-                <div class="result-chart" id="resultChart"></div>
-                <div id="feedbackArea"></div>
-            </div>
-            <div class="result-buttons">
-                <button class="btn-download" onclick="downloadResult()">
-                    📸 이미지로 저장하기
-                </button>
-                <button class="btn-reset" onclick="resetActivity()">
-                    🔄 다시 하기
-                </button>
-            </div>
-        </section>
-
-        <section class="reflection-section">
-            <h2>💭 생각해봐요</h2>
-            <div class="reflection-questions">
-                <div class="question-box">
-                    <p class="question">❓ 상처주는 말과 무관심한 말은 어떻게 다를까요?</p>
-                    <textarea class="answer-box" placeholder="자유롭게 생각을 적어보세요..."></textarea>
-                </div>
-                <div class="question-box">
-                    <p class="question">❓ 재빨라가 이런 댓글들을 본다면 어떤 기분일까요?</p>
-                    <textarea class="answer-box" placeholder="자유롭게 생각을 적어보세요..."></textarea>
-                </div>
-                <div class="question-box">
-                    <p class="question">❓ 댓글을 달기 전에 우리가 생각해야 할 것은 무엇일까요?</p>
-                    <textarea class="answer-box" placeholder="자유롭게 생각을 적어보세요..."></textarea>
-                </div>
-            </div>
-        </section>
-
-        <button class="btn-submit" id="submitBtn" onclick="showResults()">
-            ✅ 결과 확인하기
-        </button>
+      <button class="btn-submit" id="submitBtn" onclick="showResults()">
+        ✅ 결과 확인하기
+      </button>
     </div>
 
     <script src="script.js"></script>
-</body>
+  </body>
 </html>
